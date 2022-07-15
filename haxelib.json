@@ -1,0 +1,14 @@
+{
+  "name": "haxetoml",
+  "url": "https://github.com/codescapade/haxetoml",
+  "contributors": ["codescapade", "raincole"],
+  "tags": [
+    "cross",
+    "toml",
+    "parser"
+  ],
+  "description": "A cross-platform TOML implementation in haxe.",
+  "version": "0.2.0",
+  "license": "MIT",
+  "releasenote": "Updated to support dotted keys"
+}

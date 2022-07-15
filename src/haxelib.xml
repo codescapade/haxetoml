@@ -1,8 +1,0 @@
-<project name="haxetoml" url="https://github.com/raincole/haxetoml" license="MIT">
-    <user name="raincole"/>
-    <tag v="cross"/>
-    <tag v="toml"/>
-    <tag v="parser"/>
-    <description>The cross-platform TOML v0.1.0 implementation in haXe.</description>
-    <version name="0.1.5">Bugs fixed</version>
-</project>

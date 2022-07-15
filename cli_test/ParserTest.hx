@@ -1,4 +1,3 @@
-import sys.io.File;
 import haxetoml.*;
 
 class ParserTest {

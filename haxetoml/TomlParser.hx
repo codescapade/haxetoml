@@ -1,7 +1,10 @@
 package haxetoml;
 
-using haxe.Utf8;
-using Lambda;
+#if neko
+import neko.Utf8;
+#else
+import haxe.Utf8;
+#end
 
 private enum TokenType {
 	TkInvalid;
@@ -26,7 +29,7 @@ class TomlParser {
 	var	root : Dynamic;
 	var pos = 0;
 
-	public var currentToken(get_currentToken, null) : Token;
+	public var currentToken(get, null) : Token;
 
 	/** Set up a new TomlParser instance */
 	public function new() {}
@@ -34,9 +37,6 @@ class TomlParser {
 	/** Parse a TOML string into a dynamic object.  Throws a String containing an error message if an error is encountered. */
 	public function parse(str : String, ?defaultValue : Dynamic) : Dynamic {
 		tokens = tokenize(str);
-
-		//for(token in tokens)
-			//trace(token);
 
 		if(defaultValue != null) {
 			root = defaultValue;
@@ -68,8 +68,18 @@ class TomlParser {
 					createKeygroup(keygroup);
 					nextToken();
 				case TkKey:
-					var pair = parsePair();
-					setPair(keygroup, pair);
+					if (currentToken.value.indexOf('.') != -1) {
+						createKeygroup(currentToken.value);
+						keygroup = currentToken.value;
+						nextToken();
+						nextToken();
+						var split = keygroup.split('.');
+						var v = parseValue();
+						setPair(split[0], { key: split[1], value: v  });
+					} else {
+						var pair = parsePair();
+						setPair(keygroup, pair);
+					}
 				default:
 					InvalidToken(currentToken);
 			}
@@ -77,7 +87,7 @@ class TomlParser {
 	}
 
 	function parsePair() {
-		var key = "";
+		var key = '';
 		var value = {};
 
 		if(currentToken.type == TkKey) {
@@ -90,6 +100,9 @@ class TomlParser {
 			} else {
 				InvalidToken(currentToken);
 			}
+		} else if (currentToken.type == TkAssignment) {
+			nextToken();
+			value = parseValue();
 		} else {
 			InvalidToken(currentToken);
 		}
@@ -154,7 +167,7 @@ class TomlParser {
 	}
 
 	function createKeygroup(keygroup : String) {
-		var keys = keygroup.split(".");
+		var keys = keygroup.split('.');
 		var obj = root;
 
 		for(key in keys) {
@@ -168,12 +181,12 @@ class TomlParser {
 	}
 
 	function setPair(keygroup : String, pair : { key : String, value : Dynamic }) {
-		var keys = keygroup.split(".");
+		var keys = keygroup.split('.');
 		var obj = root;
 
 		for(key in keys) {
 			// A Haxe glitch: empty string will be parsed to [""]
-			if(key != "") {
+			if(key != '') {
 				obj = Reflect.field(obj, key);
 			}
 		}
@@ -210,7 +223,7 @@ class TomlParser {
 
 	function decodeDatetime(token : Token) : Date {
 		return decode(token, TokenType.TkDatetime, function(v) {
-			var dateStr = ~/(T|Z)/.replace(v, "");
+			var dateStr = ~/(T|Z)/.replace(v, '');
 			return Date.fromString(dateStr);
 		});
 	}
@@ -239,7 +252,7 @@ class TomlParser {
 
 	function unescape(str : String) {
 		var pos = 0;
-		var buf = new haxe.Utf8();
+		var buf = new Utf8();
 
 		var len = Utf8.length(str);
 		while(pos < len) {
@@ -253,23 +266,23 @@ class TomlParser {
 
 			pos++;
 
-			if(c == "\\".code) {
+			if(c == '\\'.code) {
 				c = Utf8.charCodeAt(str, pos);
 				pos++;
 
 				switch(c) {
-					case "r".code: buf.addChar("\r".code);
-					case "n".code: buf.addChar("\n".code);
-					case "t".code: buf.addChar("\t".code);
-					case "b".code: buf.addChar(8);
-					case "f".code: buf.addChar(12);
-					case "/".code, "\\".code, "\"".code: buf.addChar(c);
-					case "u".code:
-						var uc = Std.parseInt("0x" + Utf8.sub(str, pos, 4));
+					case 'r'.code: buf.addChar('\r'.code);
+					case 'n'.code: buf.addChar('\n'.code);
+					case 't'.code: buf.addChar('\t'.code);
+					case 'b'.code: buf.addChar(8);
+					case 'f'.code: buf.addChar(12);
+					case '/'.code, '\\'.code, '\''.code: buf.addChar(c);
+					case 'u'.code:
+						var uc = Std.parseInt('0x' + Utf8.sub(str, pos, 4));
 						buf.addChar(uc);
 						pos += 4;
 					default:
-						throw("Invalid Escape");
+						throw('Invalid Escape');
 				}
 			} else {
 				buf.addChar(c);
@@ -321,8 +334,7 @@ class TomlParser {
 
 					if(ereg.match(subline)) {
 						// TkKey has to be the first token of a line
-						if((type == TokenType.TkKeygroup || type == TokenType.TkKey)
-						   && tokenColNum != 0) {
+						if((type == TokenType.TkKeygroup || type == TokenType.TkKey) && tokenColNum != 0) {
 							continue;
 						}
 
@@ -351,27 +363,28 @@ class TomlParser {
 	}
 
 	function InvalidCharacter(char : String, lineNum : Int, colNum : Int) {
-		throw('Line $lineNum Character ${colNum+1}: ' +
-			  'Invalid Character \'$char\', ' +
-			  'Character Code ${char.charCodeAt(0)}');
+		throw('Line $lineNum Character ${colNum+1}: Invalid Character \'$char\', Character Code ${char.charCodeAt(0)}');
 	}
 
 	function InvalidToken(token : Token) {
-		throw('Line ${token.lineNum+1} Character ${token.colNum+1}: ' +
-			  'Invalid Token \'${token.value}\'(${token.type})');
+		throw('Line ${token.lineNum+1} Character ${token.colNum+1}: Invalid Token \'${token.value}\'(${token.type})');
 	}
 
-	/** Static shortcut method to parse toml String into Dynamic object. */
+	/**
+	 * Static shortcut method to parse toml String into Dynamic object.
+	 */
 	public static function parseString(toml: String, defaultValue: Dynamic)
 	{
 		return (new TomlParser()).parse(toml, defaultValue);
 	}
 
 	#if (neko || php || cpp)
-		/** Static shortcut method to read toml file and parse into Dynamic object.  Available on Neko, PHP and CPP. */
-		public static function parseFile(filename: String, ?defaultValue: Dynamic)
-		{
-			return parseString(sys.io.File.getContent(filename), defaultValue);
-		}
+	/**
+	 * Static shortcut method to read toml file and parse into Dynamic object.  Available on Neko, PHP and CPP.
+	 */
+	public static function parseFile(filename: String, ?defaultValue: Dynamic)
+	{
+		return parseString(sys.io.File.getContent(filename), defaultValue);
+	}
 	#end
 }

@@ -1,6 +1,6 @@
 # Neko
 -main ParserTest
--cp src
+-cp haxetoml
 -cp cli_test
 -neko cli_test/bin/ParserTest.n
 -D debug

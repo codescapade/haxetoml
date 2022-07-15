@@ -33,3 +33,6 @@ hosts = [
   "alpha",
   "omega"
 ]
+
+fruit.apple = "red"
+fruit.pear = "green"
