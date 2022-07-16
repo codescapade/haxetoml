@@ -8,7 +8,7 @@
     "parser"
   ],
   "description": "A cross-platform TOML implementation in haxe.",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "license": "MIT",
-  "releasenote": "Updated to support dotted keys"
+  "releasenote": "Added array of tables and inline tables support"
 }

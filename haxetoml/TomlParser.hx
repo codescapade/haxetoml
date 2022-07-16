@@ -7,384 +7,503 @@ import haxe.Utf8;
 #end
 
 private enum TokenType {
-	TkInvalid;
-	TkComment;
-	TkKey;
-	TkKeygroup;
-	TkString; TkInteger; TkFloat; TkBoolean; TkDatetime;
-	TkAssignment;
-	TkComma;
-	TkBBegin; TkBEnd;
+  TkInvalid;
+  TkComment;
+  TkKey;
+  TkTable;
+  TkInlineTableStart;
+  TkInlineTableEnd;
+  TkTableArray;
+  TkString;
+  TkInteger;
+  TkFloat;
+  TkBoolean;
+  TkDatetime;
+  TkAssignment;
+  TkComma;
+  TkBBegin;
+  TkBEnd;
 }
 
 private typedef Token = {
-	var type : TokenType;
-	var value : String;
-	var lineNum : Int;
-	var colNum : Int;
+  var type: TokenType;
+  var value: String;
+  var lineNum: Int;
+  var colNum: Int;
 }
 
 class TomlParser {
-	var tokens : Array<Token>;
-	var	root : Dynamic;
-	var pos = 0;
+  var tokens: Array<Token>;
+  var root: Dynamic;
+  var pos = 0;
 
-	public var currentToken(get, null) : Token;
+  public var currentToken(get, null): Token;
 
-	/** Set up a new TomlParser instance */
-	public function new() {}
+  /**
+   * Set up a new TomlParser instance
+   */
+  public function new() {}
 
-	/** Parse a TOML string into a dynamic object.  Throws a String containing an error message if an error is encountered. */
-	public function parse(str : String, ?defaultValue : Dynamic) : Dynamic {
-		tokens = tokenize(str);
+  /**
+   * Parse a TOML string into a dynamic object. Throws a String containing an error message if an error is encountered.
+   */
+  public function parse(str: String, ?defaultValue: Dynamic): Dynamic {
+    tokens = tokenize(str);
+    if (defaultValue != null) {
+      root = defaultValue;
+    } else {
+      root ={};
+    }
+    pos = 0;
 
-		if(defaultValue != null) {
-			root = defaultValue;
-		} else {
-			root = {};
-		}
-		pos = 0;
+    parseObj();
 
-		parseObj();
+    return root;
+  }
 
-		return root;
-	}
+  function get_currentToken() {
+    return tokens[pos];
+  }
 
-	function get_currentToken() {
-		return tokens[pos];
-	}
+  function nextToken() {
+    pos++;
+  }
 
-	function nextToken() {
-		pos++;
-	}
+  function parseObj() {
+    var table = '';
 
-	function parseObj() {
-		var keygroup = "";
+    while (pos < tokens.length) {
+      switch (currentToken.type) {
+        case TkTableArray:
+          table = decodeTableArray(currentToken);
+          createTable(table, true);
+          nextToken();
 
-		while(pos < tokens.length) {
-			switch (currentToken.type) {
-				case TkKeygroup:
-					keygroup = decodeKeygroup(currentToken);
-					createKeygroup(keygroup);
-					nextToken();
-				case TkKey:
-					if (currentToken.value.indexOf('.') != -1) {
-						createKeygroup(currentToken.value);
-						keygroup = currentToken.value;
-						nextToken();
-						nextToken();
-						var split = keygroup.split('.');
-						var v = parseValue();
-						setPair(split[0], { key: split[1], value: v  });
-					} else {
-						var pair = parsePair();
-						setPair(keygroup, pair);
-					}
-				default:
-					InvalidToken(currentToken);
-			}
-		}
-	}
+        case TkTable:
+          table = decodeTable(currentToken);
+          createTable(table, false);
+          nextToken();
+        case TkKey:
+          // Dotted key.
+          if (currentToken.value.indexOf('.') != -1) {
+            table = parseDottedKey();
+          } else {
+            final pair = parsePair();
+            setPair(table, pair);
+          }
+        default:
+          InvalidToken(currentToken);
+      }
+    }
+  }
 
-	function parsePair() {
-		var key = '';
-		var value = {};
+  function parseDottedKey(): String {
+    createTable(currentToken.value, false);
+    final table = currentToken.value;
+    nextToken();
+    nextToken();
+    final v = parseValue();
+    final lastDotPos = table.lastIndexOf('.');
+    var tablePart = table.substring(0, lastDotPos);
+    var keyPart = table.substring(lastDotPos + 1);
+    setPair(tablePart, { key: keyPart, value: v });
 
-		if(currentToken.type == TkKey) {
-			key = decodeKey(currentToken);
-			nextToken();
+    return table;
+  }
 
-			if(currentToken.type == TkAssignment) {
-				nextToken();
-				value = parseValue();
-			} else {
-				InvalidToken(currentToken);
-			}
-		} else if (currentToken.type == TkAssignment) {
-			nextToken();
-			value = parseValue();
-		} else {
-			InvalidToken(currentToken);
-		}
+  function parsePair() {
+    var key = '';
+    var value ={};
 
-		return { key: key, value: value };
-	}
+    if (currentToken.type == TkKey) {
+      key = decodeKey(currentToken);
+      nextToken();
 
-	function parseValue() : Dynamic {
-		var value : Dynamic = {};
+      if (currentToken.type == TkAssignment) {
+        nextToken();
+        value = parseValue();
+      } else {
+        InvalidToken(currentToken);
+      }
+    } else if (currentToken.type == TkAssignment) {
+      nextToken();
+      value = parseValue();
+    } else {
+      InvalidToken(currentToken);
+    }
 
-		switch(currentToken.type) {
-			case TkString:
-				value = decodeString(currentToken);
-				nextToken();
-			case TkDatetime:
-				value = decodeDatetime(currentToken);
-				nextToken();
-			case TkFloat:
-				value = decodeFloat(currentToken);
-				nextToken();
-			case TkInteger:
-				value = decodeInteger(currentToken);
-				nextToken();
-			case TkBoolean:
-				value = decodeBoolean(currentToken);
-				nextToken();
-			case TkBBegin:
-				value = parseArray();
-			default:
-				InvalidToken(currentToken);
-		};
+    return { key: key, value: value };
+  }
 
-		return value;
-	}
+  function parseValue(): Dynamic {
+    var value: Dynamic ={};
+    switch (currentToken.type) {
+      case TkString:
+        value = decodeString(currentToken);
+        nextToken();
+      case TkDatetime:
+        value = decodeDatetime(currentToken);
+        nextToken();
+      case TkFloat:
+        value = decodeFloat(currentToken);
+        nextToken();
+      case TkInteger:
+        value = decodeInteger(currentToken);
+        nextToken();
+      case TkBoolean:
+        value = decodeBoolean(currentToken);
+        nextToken();
+      case TkBBegin:
+        value = parseArray();
+      case TkInlineTableStart:
+        value = parseInlineTable();
+      default:
+        InvalidToken(currentToken);
+    };
 
-	function parseArray() {
-		var array = [];
+    return value;
+  }
 
-		if(currentToken.type == TokenType.TkBBegin) {
-			nextToken();
-			while(true) {
-				if(currentToken.type != TkBEnd) {
-					array.push(parseValue());
-				} else {
-					nextToken();
-					break;
-				}
+  function parseArray(): Array<Dynamic> {
+    final array = [];
 
-				switch(currentToken.type) {
-					case TkComma:
-						nextToken();
-					case TkBEnd:
-						nextToken();
-						break;
-					default:
-						InvalidToken(currentToken);
-				}
-			}
-		}
+    if (currentToken.type == TkBBegin) {
+      nextToken();
+      while (true) {
+        if (currentToken.type != TkBEnd) {
+          array.push(parseValue());
+        } else {
+          nextToken();
+          break;
+        }
 
-		return array;
-	}
+        switch (currentToken.type) {
+          case TkComma:
+            nextToken();
+          case TkBEnd:
+            nextToken();
+            break;
+          default:
+            InvalidToken(currentToken);
+        }
+      }
+    }
 
-	function createKeygroup(keygroup : String) {
-		var keys = keygroup.split('.');
-		var obj = root;
+    return array;
+  }
 
-		for(key in keys) {
-			var next = Reflect.field(obj, key);
-			if(next == null) {
-				Reflect.setField(obj, key, {});
-				next = Reflect.field(obj, key);
-			}
-			obj = next;
-		}
-	}
+  function parseInlineTable(): Dynamic {
+    var table: Dynamic ={};
+    if (currentToken.type == TkInlineTableStart) {
+      nextToken();
+      while (true) {
+        if (currentToken.type != TkInlineTableEnd) {
+          final pair = parsePair();
+          final keys = pair.key.split('.');
 
-	function setPair(keygroup : String, pair : { key : String, value : Dynamic }) {
-		var keys = keygroup.split('.');
-		var obj = root;
+          if (keys.length > 1) {
+            var obj = table;
+            for (i in 0...keys.length) {
+              var key = keys[i];
+              if (key != '' && i < keys.length - 1) {
+                var next = Reflect.field(obj, key);
+                if (next == null) {
+                  Reflect.setField(obj, key, {});
+                  next = Reflect.field(obj, key);
+                }
+                obj = next;
+              }
+            }
+            Reflect.setField(obj, keys[keys.length - 1], pair.value);
+          } else {
+            Reflect.setField(table, pair.key, pair.value);
+          }
+        }
 
-		for(key in keys) {
-			// A Haxe glitch: empty string will be parsed to [""]
-			if(key != '') {
-				obj = Reflect.field(obj, key);
-			}
-		}
+        switch (currentToken.type) {
+          case TkComma:
+            nextToken();
+          case TkInlineTableEnd:
+            nextToken();
+            break;
+          default:
+            InvalidToken(currentToken);
+        }
+      }
+    }
 
-		Reflect.setField(obj, pair.key, pair.value);
-	}
+    return table;
+  }
 
-	function decode<T>(token : Token, expectedType : TokenType, decoder : String -> T) : T {
-		var type = token.type;
-		var value = token.value;
+  function createTable(table: String, tableArray: Bool) {
+    final keys = table.split('.');
+    var obj = root;
 
-		if(type == expectedType)
-			return decoder(value);
-		else
-			throw('Can\'t parse $type as $expectedType');
-	}
+    for (i in 0...keys.length) {
+      final key = keys[i];
+      var next = Reflect.field(obj, key);
+      if (next == null) {
+        if (tableArray) {
+          var next: Dynamic ={};
+          Reflect.setField(obj, key, [next]);
+        } else {
+          Reflect.setField(obj, key, {});
+          next = Reflect.field(obj, key);
+        }
+      } else if (i == keys.length - 1 && tableArray) {
+        if (next is Array) {
+          final nextArray: Array<Dynamic> = next;
+          final nextItem: Dynamic ={};
+          nextArray.push(nextItem);
+          next = nextItem;
+        }
+      } else {
+        if (next is Array) {
+          next = cast next[next.length - 1];
+        }
+      }
+      obj = next;
+    }
+  }
 
-	function decodeKeygroup(token : Token) : String {
-		return decode(token, TokenType.TkKeygroup, function(v) {
-			return v.substring(1, v.length - 1);
-		});
-	}
+  function setPair(table: String, pair: { key: String, value: Dynamic }) {
+    final keys = table.split('.');
+    var obj = root;
 
-	function decodeString(token : Token) : String {
-		return decode(token, TokenType.TkString, function(v) {
-			try {
-				return unescape(v);
-			} catch(msg : String) {
-				InvalidToken(token);
-				return "";
-			};
-		});
-	}
+    for (key in keys) {
+      // A Haxe glitch: empty string will be parsed to ['']
+      if (key != '') {
+        obj = Reflect.field(obj, key);
+        if (obj is Array) {
+          obj = cast obj[obj.length - 1];
+        }
+      }
+    }
 
-	function decodeDatetime(token : Token) : Date {
-		return decode(token, TokenType.TkDatetime, function(v) {
-			var dateStr = ~/(T|Z)/.replace(v, '');
-			return Date.fromString(dateStr);
-		});
-	}
+    Reflect.setField(obj, pair.key, pair.value);
+  }
 
-	function decodeFloat(token : Token) : Float {
-		return decode(token, TokenType.TkFloat, function(v) {
-			return Std.parseFloat(v);
-		});
-	}
+  function decode<T>(token: Token, expectedType: TokenType, decoder: String->T): T {
+    if (token.type == expectedType)
+      return decoder(token.value);
+    else
+      throw('Can\'t parse ${token.type} as $expectedType');
+  }
 
-	function decodeInteger(token : Token) : Int {
-		return decode(token, TokenType.TkInteger, function(v) {
-			return Std.parseInt(v);
-		});
-	}
+  function decodeTable(token: Token): String {
+    return decode(token, TkTable, function(v) {
+      return v.substring(1, v.length - 1);
+    });
+  }
 
-	function decodeBoolean(token : Token) : Bool {
-		return decode(token, TokenType.TkBoolean, function(v) {
-			return v == "true";
-		});
-	}
+  function decodeTableArray(token: Token): String {
+    return decode(token, TkTableArray, function(v) {
+      return v.substring(2, v.length - 2);
+    });
+  }
 
-	function decodeKey(token : Token) : String {
-		return decode(token, TokenType.TkKey, function(v) { return v; });
-	}
+  function decodeString(token: Token): String {
+    return decode(token, TkString, function(v) {
+      try {
+        return unescape(v);
+      } catch (msg:String) {
+        InvalidToken(token);
+        return "";
+      };
+    });
+  }
 
-	function unescape(str : String) {
-		var pos = 0;
-		var buf = new Utf8();
+  function decodeDatetime(token: Token): Date {
+    return decode(token, TkDatetime, function(v) {
+      final dateStr = ~/(T|Z)/.replace(v, '');
+      return Date.fromString(dateStr);
+    });
+  }
 
-		var len = Utf8.length(str);
-		while(pos < len) {
-			var c = Utf8.charCodeAt(str, pos);
+  function decodeFloat(token: Token): Float {
+    return decode(token, TkFloat, function(v) {
+      return Std.parseFloat(v);
+    });
+  }
 
-			// strip first and last quotation marks
-			if ((pos == 0 || pos == len-1) && c == "\"".code) {
-				pos++;
-				continue;
-			}
+  function decodeInteger(token: Token): Int {
+    return decode(token, TkInteger, function(v) {
+      return Std.parseInt(v);
+    });
+  }
 
-			pos++;
+  function decodeBoolean(token: Token): Bool {
+    return decode(token, TkBoolean, function(v) {
+      return v == "true";
+    });
+  }
 
-			if(c == '\\'.code) {
-				c = Utf8.charCodeAt(str, pos);
-				pos++;
+  function decodeKey(token: Token): String {
+    return decode(token, TkKey, function(v) {
+      return v;
+    });
+  }
 
-				switch(c) {
-					case 'r'.code: buf.addChar('\r'.code);
-					case 'n'.code: buf.addChar('\n'.code);
-					case 't'.code: buf.addChar('\t'.code);
-					case 'b'.code: buf.addChar(8);
-					case 'f'.code: buf.addChar(12);
-					case '/'.code, '\\'.code, '\''.code: buf.addChar(c);
-					case 'u'.code:
-						var uc = Std.parseInt('0x' + Utf8.sub(str, pos, 4));
-						buf.addChar(uc);
-						pos += 4;
-					default:
-						throw('Invalid Escape');
-				}
-			} else {
-				buf.addChar(c);
-			}
-		}
+  function unescape(str: String) {
+    var pos = 0;
+    final buf = new Utf8();
 
-		return buf.toString();
-	}
+    final len = Utf8.length(str);
+    while (pos < len) {
+      var c = Utf8.charCodeAt(str, pos);
 
-	function tokenize(str : String) {
-		var tokens = new Array<Token>();
-		var lineBreakPattern = ~/\r\n?|\n/g;
-		var lines = lineBreakPattern.split(str);
-		var a = ~/abc/;
-		var patterns = [
-			{ type: TokenType.TkComment, ereg: ~/^#.*$/},
-			{ type: TokenType.TkKeygroup, ereg: ~/^\[.+]/},
-			{ type: TokenType.TkString, ereg: ~/^"((\\")|[^"])*"/},
-			{ type: TokenType.TkAssignment, ereg: ~/^=/},
-			{ type: TokenType.TkBBegin, ereg: ~/^\[/},
-			{ type: TokenType.TkBEnd, ereg: ~/^]/},
-			{ type: TokenType.TkComma, ereg: ~/^,/},
-			{ type: TokenType.TkKey, ereg: ~/^\S+/},
-			{ type: TokenType.TkDatetime, ereg: ~/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z/},
-			{ type: TokenType.TkFloat, ereg: ~/^-?\d+\.\d+/},
-			{ type: TokenType.TkInteger, ereg: ~/^-?\d+/},
-			{ type: TokenType.TkBoolean, ereg: ~/^true|^false/},
-		];
+      // strip first and last quotation marks
+      if ((pos == 0 || pos == len - 1) && c == "\"".code) {
+        pos++;
+        continue;
+      }
 
-		for(lineNum in 0...lines.length) {
-			var line = lines[lineNum];
+      pos++;
 
-			var colNum = 0;
-			var tokenColNum = 0;
-			while(colNum < line.length) {
-				while(StringTools.isSpace(line, colNum)) {
-					colNum++;
-				}
-				if(colNum >= line.length) {
-					break;
-				}
+      if (c == '\\'.code) {
+        c = Utf8.charCodeAt(str, pos);
+        pos++;
 
-				var subline = line.substring(colNum);
+        switch (c) {
+          case 'r'.code:
+            buf.addChar('\r'.code);
+          case 'n'.code:
+            buf.addChar('\n'.code);
+          case 't'.code:
+            buf.addChar('\t'.code);
+          case 'b'.code:
+            buf.addChar(8);
+          case 'f'.code:
+            buf.addChar(12);
+          case '/'.code, '\\'.code, '\''.code:
+            buf.addChar(c);
+          case 'u'.code:
+            var uc = Std.parseInt('0x' + Utf8.sub(str, pos, 4));
+            buf.addChar(uc);
+            pos += 4;
+          default:
+            throw('Invalid Escape');
+        }
+      } else {
+        buf.addChar(c);
+      }
+    }
 
-				var matched = false;
-				for(pattern in patterns) {
-					var type = pattern.type;
-					var ereg = pattern.ereg;
+    return buf.toString();
+  }
 
-					if(ereg.match(subline)) {
-						// TkKey has to be the first token of a line
-						if((type == TokenType.TkKeygroup || type == TokenType.TkKey) && tokenColNum != 0) {
-							continue;
-						}
+  function tokenize(str: String) {
+    final tokens = new Array<Token>();
+    final lineBreakPattern = ~/\r\n?|\n/g;
+    final lines = lineBreakPattern.split(str);
+    final patterns = [
+      { type: TkComment, ereg: ~/^#.*$/ },
+      { type: TkTable, ereg: ~/^\[([^\[].*?)\]/ },
+      { type: TkTableArray, ereg: ~/^\[{2}([^\[].*?)\]{2}/ },
+      { type: TkInlineTableStart, ereg: ~/^\{/ },
+      { type: TkInlineTableEnd, ereg: ~/^\}/ },
+      { type: TkString, ereg: ~/^"((\\")|[^"])*"/ },
+      { type: TkAssignment, ereg: ~/^=/ },
+      { type: TkBBegin, ereg: ~/^\[/ },
+      { type: TkBEnd, ereg: ~/^\]/ },
+      { type: TkComma, ereg: ~/^,/ },
+      { type: TkKey, ereg: ~/^\S+/ },
+      { type: TkDatetime, ereg: ~/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z/ },
+      { type: TkFloat, ereg: ~/^-?\d+\.\d+/ },
+      { type: TkInteger, ereg: ~/^-?\d+/ },
+      { type: TkBoolean, ereg: ~/^true|^false/ },
+    ];
 
-						if(type != TokenType.TkComment) {
-							tokens.push({
-								type: type,
-								value: ereg.matched(0),
-								lineNum: lineNum,
-								colNum: colNum,
-							});
-							tokenColNum++;
-						}
-						colNum += ereg.matchedPos().len;
-						matched = true;
+    for (lineNum in 0...lines.length) {
+      final line = lines[lineNum];
 
-						break;
-					}
-				}
-				if(!matched) {
-					InvalidCharacter(line.charAt(colNum), lineNum, colNum);
-				}
-			}
-		}
+      var colNum = 0;
+      var tokenColNum = 0;
+      var inInlineTable = false;
+      var canBeKey = false;
+      while (colNum < line.length) {
+        while (StringTools.isSpace(line, colNum)) {
+          colNum++;
+        }
 
-		return tokens;
-	}
+        if (colNum >= line.length) {
+          break;
+        }
 
-	function InvalidCharacter(char : String, lineNum : Int, colNum : Int) {
-		throw('Line $lineNum Character ${colNum+1}: Invalid Character \'$char\', Character Code ${char.charCodeAt(0)}');
-	}
+        final subline = line.substring(colNum);
+        var matched = false;
+        for (pattern in patterns) {
+          final type = pattern.type;
+          final ereg = pattern.ereg;
 
-	function InvalidToken(token : Token) {
-		throw('Line ${token.lineNum+1} Character ${token.colNum+1}: Invalid Token \'${token.value}\'(${token.type})');
-	}
+          if (ereg.match(subline)) {
+            // TkKey has to be the first token of a line
+            if ((type == TkTable || type == TkTableArray || type == TkKey)
+              && tokenColNum != 0
+              && (type != TkKey || !inInlineTable || !canBeKey)) {
+              continue;
+            }
 
-	/**
-	 * Static shortcut method to parse toml String into Dynamic object.
-	 */
-	public static function parseString(toml: String, defaultValue: Dynamic)
-	{
-		return (new TomlParser()).parse(toml, defaultValue);
-	}
+            if (type != TkComment) {
+              tokens.push({
+                type: type,
+                value: ereg.matched(0),
+                lineNum: lineNum,
+                colNum: colNum,
+              });
+              tokenColNum++;
+            }
+            colNum += ereg.matchedPos().len;
+            matched = true;
 
-	#if (neko || php || cpp)
-	/**
-	 * Static shortcut method to read toml file and parse into Dynamic object.  Available on Neko, PHP and CPP.
-	 */
-	public static function parseFile(filename: String, ?defaultValue: Dynamic)
-	{
-		return parseString(sys.io.File.getContent(filename), defaultValue);
-	}
-	#end
+            if (type == TkInlineTableStart) {
+              inInlineTable = true;
+              canBeKey = true;
+            } else if (type == TkInlineTableEnd) {
+              inInlineTable = false;
+            }
+
+            if (inInlineTable) {
+              if (type == TkKey) {
+                canBeKey = false;
+              } else if (type == TkComma) {
+                canBeKey = true;
+              }
+            }
+
+            break;
+          }
+        }
+        if (!matched) {
+          InvalidCharacter(line.charAt(colNum), lineNum, colNum);
+        }
+      }
+    }
+
+    return tokens;
+  }
+
+  function InvalidCharacter(char: String, lineNum: Int, colNum: Int) {
+    throw('Line $lineNum Character ${colNum + 1}: Invalid Character \'$char\', Character Code ${char.charCodeAt(0)}');
+  }
+
+  function InvalidToken(token: Token) {
+    throw('Line ${token.lineNum + 1} Character ${token.colNum + 1}: Invalid Token \'${token.value}\'(${token.type})');
+  }
+
+  /**
+   * Static shortcut method to parse toml String into Dynamic object.
+   */
+  public static function parseString(toml: String, defaultValue: Dynamic) {
+    return (new TomlParser()).parse(toml, defaultValue);
+  }
+
+  #if (neko || php || cpp)
+  /**
+   * Static shortcut method to read toml file and parse into Dynamic object.  Available on Neko, PHP and CPP.
+   */
+  public static function parseFile(filename: String, ?defaultValue: Dynamic) {
+    return parseString(sys.io.File.getContent(filename), defaultValue);
+  }
+  #end
 }

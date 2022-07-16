@@ -34,5 +34,8 @@ hosts = [
   "omega"
 ]
 
+[fruit]
+banana = "yellow"
+
 fruit.apple = "red"
 fruit.pear = "green"
