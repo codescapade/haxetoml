@@ -234,7 +234,7 @@ class TomlParser {
 
   function createTable(table: String, tableArray: Bool) {
     final keys = table.split('.');
-    var obj = root;
+    var obj: Dynamic = root;
 
     for (i in 0...keys.length) {
       final key = keys[i];
@@ -265,14 +265,14 @@ class TomlParser {
 
   function setPair(table: String, pair: { key: String, value: Dynamic }) {
     final keys = table.split('.');
-    var obj = root;
-
+    var obj: Dynamic = root;
     for (key in keys) {
       // A Haxe glitch: empty string will be parsed to ['']
       if (key != '') {
         obj = Reflect.field(obj, key);
         if (obj is Array) {
-          obj = cast obj[obj.length - 1];
+          var ar: Array<Dynamic> = cast obj;
+          obj = cast ar[ar.length - 1];
         }
       }
     }
