@@ -348,7 +348,6 @@ class TomlParser {
     final len = str.length8();
     while (pos < len) {
       var c = str.charCodeAt8(pos);
-      trace(c);
       // strip first and last quotation marks
       if ((pos == 0 || pos == len - 1) && c == '"'.code) {
         pos++;
