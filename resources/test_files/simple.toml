@@ -30,8 +30,9 @@ data = [ ["gamma", "delta"], [1, 2] ]
 
 # Line breaks are OK when inside arrays
 hosts = [
-  "alpha",
-  "omega"
+  "alpha\" \t \"testing",
+  "omega",
+  "\u0022"
 ]
 
 [fruit]

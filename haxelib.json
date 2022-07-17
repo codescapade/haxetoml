@@ -10,5 +10,8 @@
   "description": "A cross-platform TOML implementation in haxe.",
   "version": "0.3.0",
   "license": "MIT",
-  "releasenote": "Added array of tables and inline tables support"
+  "releasenote": "Added array of tables and inline tables support",
+  "dependencies": {
+    "haxe-strings": "7.0.2"
+  }
 }

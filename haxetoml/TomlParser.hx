@@ -1,10 +1,7 @@
 package haxetoml;
 
-#if neko
-import neko.Utf8;
-#else
-import haxe.Utf8;
-#end
+using hx.strings.StringBuilder;
+using hx.strings.Strings;
 
 private enum TokenType {
   TkInvalid;
@@ -346,14 +343,14 @@ class TomlParser {
 
   function unescape(str: String) {
     var pos = 0;
-    final buf = new Utf8();
+    final sb = new StringBuilder();
 
-    final len = Utf8.length(str);
+    final len = str.length8();
     while (pos < len) {
-      var c = Utf8.charCodeAt(str, pos);
-
+      var c = str.charCodeAt8(pos);
+      trace(c);
       // strip first and last quotation marks
-      if ((pos == 0 || pos == len - 1) && c == "\"".code) {
+      if ((pos == 0 || pos == len - 1) && c == '"'.code) {
         pos++;
         continue;
       }
@@ -361,35 +358,41 @@ class TomlParser {
       pos++;
 
       if (c == '\\'.code) {
-        c = Utf8.charCodeAt(str, pos);
+        c = str.charCodeAt8(pos);
         pos++;
 
         switch (c) {
           case 'r'.code:
-            buf.addChar('\r'.code);
+            sb.addChar('\r'.code);
           case 'n'.code:
-            buf.addChar('\n'.code);
+            sb.addChar('\n'.code);
           case 't'.code:
-            buf.addChar('\t'.code);
+            sb.addChar('\t'.code);
           case 'b'.code:
-            buf.addChar(8);
+            sb.addChar(8);
           case 'f'.code:
-            buf.addChar(12);
+            sb.addChar(12);
           case '/'.code, '\\'.code, '\''.code:
-            buf.addChar(c);
+            sb.addChar(c);
           case 'u'.code:
-            var uc = Std.parseInt('0x' + Utf8.sub(str, pos, 4));
-            buf.addChar(uc);
+            final uc = Std.parseInt('0x${str.substr8(pos, 4)}');
+            sb.addChar(uc);
             pos += 4;
+          case 'U'.code:
+            final uc = Std.parseInt('0x${str.substr8(pos, 8)}');
+            sb.addChar(uc);
+            pos += 8;
+          case '"'.code:
+            sb.addChar('\"'.code);
           default:
             throw('Invalid Escape');
         }
       } else {
-        buf.addChar(c);
+        sb.addChar(c);
       }
     }
 
-    return buf.toString();
+    return sb.toString();
   }
 
   function tokenize(str: String) {

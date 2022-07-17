@@ -1,6 +1,7 @@
 # Neko
 -main ParserTest
 # -cp src
+-lib haxe-strings
 -lib haxetoml
 -cp cli_test
 -neko cli_test/bin/ParserTest.n
@@ -10,6 +11,7 @@
 # C++ 64bits
 -main ParserTest
 # -cp src
+-lib haxe-strings
 -lib haxetoml
 -cp cli_test
 -D HXCPP_M64

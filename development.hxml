@@ -1,4 +1,5 @@
 # Neko
+-L haxe-strings
 -main ParserTest
 -cp haxetoml
 -cp cli_test
