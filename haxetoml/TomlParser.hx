@@ -496,7 +496,7 @@ class TomlParser {
   /**
    * Static shortcut method to parse toml String into Dynamic object.
    */
-  public static function parseString(toml: String, defaultValue: Dynamic) {
+  public static function parseString(toml: String, defaultValue: Dynamic): Dynamic {
     return (new TomlParser()).parse(toml, defaultValue);
   }
 
@@ -504,7 +504,7 @@ class TomlParser {
   /**
    * Static shortcut method to read toml file and parse into Dynamic object.  Available on Neko, PHP and CPP.
    */
-  public static function parseFile(filename: String, ?defaultValue: Dynamic) {
+  public static function parseFile(filename: String, ?defaultValue: Dynamic): Dynamic {
     return parseString(sys.io.File.getContent(filename), defaultValue);
   }
   #end
